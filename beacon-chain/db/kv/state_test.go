@@ -24,6 +24,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
 	"github.com/balacode/go-delta"
+	"github.com/golang/snappy"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -1314,19 +1315,38 @@ func TestDiff_ReadAndUnmarshal(t *testing.T) {
 	dd2, err := state2.MarshalSSZ()
 	require.NoError(t, err)
 
+	d1snappy := snappy.Encode(nil, dd1)
+	d2snappy := snappy.Encode(nil, dd2)
+
 	//var patch []byte
 
 	start := time.Now()
 
-	dlta := delta.Make(dd1, dd2)
-	dltabytes := dlta.Bytes()
-	p, err := delta.Load(dltabytes)
-	require.NoError(t, err)
+	dlta := delta.Make(d1snappy, d2snappy)
 
 	elapsed := time.Since(start)
 	fmt.Printf("Function took %s\n", elapsed)
 
+	dltabytes := dlta.Bytes()
+	p, err := delta.Load(dltabytes)
+	require.NoError(t, err)
+
 	fmt.Println(len(p.Bytes()))
+
+	start = time.Now()
+
+	newd, err := p.Apply(d1snappy)
+	require.NoError(t, err)
+
+	elapsed = time.Since(start)
+	fmt.Printf("Function2 took %s\n", elapsed)
+
+	newSSZ, err := snappy.Decode(nil, newd)
+	require.NoError(t, err)
+	var state3 ethpb.BeaconStateElectra
+	err = state3.UnmarshalSSZ(newSSZ)
+	require.NoError(t, err)
+
 	//
 	//fmt.Println(state1.Slot, len(d1), state2.Slot, len(d2))
 	//
