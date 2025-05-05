@@ -4,7 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"fmt"
 	mathRand "math/rand"
+	"os"
 	"strconv"
 	"testing"
 	"time"
@@ -21,6 +23,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
 	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"github.com/balacode/go-delta"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -1287,3 +1290,92 @@ func BenchmarkState_CheckStateSaveTime_10(b *testing.B) { checkStateSaveTime(b, 
 
 func BenchmarkState_CheckStateReadTime_1(b *testing.B)  { checkStateReadTime(b, 1) }
 func BenchmarkState_CheckStateReadTime_10(b *testing.B) { checkStateReadTime(b, 10) }
+
+func TestDiff_ReadAndUnmarshal(t *testing.T) {
+	d1, err := os.ReadFile("/home/mohamad/Desktop/state1.ssz")
+	require.NoError(t, err)
+	d2, err := os.ReadFile("/home/mohamad/Desktop/state2.ssz")
+	require.NoError(t, err)
+
+	var state1, state2 ethpb.BeaconStateElectra
+	err = state1.UnmarshalSSZ(d1)
+	require.NoError(t, err)
+	err = state2.UnmarshalSSZ(d2)
+	require.NoError(t, err)
+
+	require.DeepNotEqual(t, state1, state2)
+	state1.Balances = []uint64{}
+	state2.Balances = []uint64{}
+	state1.Validators = []*ethpb.Validator{}
+	state2.Validators = []*ethpb.Validator{}
+
+	dd1, err := state1.MarshalSSZ()
+	require.NoError(t, err)
+	dd2, err := state2.MarshalSSZ()
+	require.NoError(t, err)
+
+	//var patch []byte
+
+	start := time.Now()
+
+	dlta := delta.Make(dd1, dd2)
+	dltabytes := dlta.Bytes()
+	p, err := delta.Load(dltabytes)
+	require.NoError(t, err)
+
+	elapsed := time.Since(start)
+	fmt.Printf("Function took %s\n", elapsed)
+
+	fmt.Println(len(p.Bytes()))
+	//
+	//fmt.Println(state1.Slot, len(d1), state2.Slot, len(d2))
+	//
+	//fmt.Println(state1.Validators[1923842])
+	//fmt.Println(state2.Validators[1923842])
+}
+
+// BeaconStateDiff holds separate compressed diffs for balances, validators, and the rest of the state.
+//type BeaconStateDiff struct {
+//	BalancesDiff   []byte // snappy-compressed XOR diff of balances SSZ
+//	ValidatorsDiff []byte // snappy-compressed XOR diff of validators SSZ
+//	RestDiff       []byte // snappy-compressed XOR diff of the rest of the state SSZ
+//}
+//
+//func stateDiff(s1, s2 *ethpb.BeaconStateElectra) (*BeaconStateDiff, error) {
+//	// 1) Balances
+//	baseBalBytes, err := bytesutil.tobytes
+//	targetBalBytes := ssz.Marshal(s2.Balances)
+//	balDiff, err := xorAndCompress(baseBalBytes, targetBalBytes)
+//	if err != nil {
+//		return nil, fmt.Errorf("balance diff: %w", err)
+//	}
+//
+//	// 2) Validators
+//	baseValBytes, _ := ssz.MarshalSSZ(s1.Validators)
+//	targetValBytes := ssz.Marshal(s2.Validators)
+//	valDiff, err := xorAndCompress(baseValBytes, targetValBytes)
+//	if err != nil {
+//		return nil, fmt.Errorf("validator diff: %w", err)
+//	}
+//
+//	// 3) Rest of state: zero out balances & validators
+//	baseCopy := *s1
+//	baseCopy.Balances = nil
+//	baseCopy.Validators = nil
+//	targCopy := *s2
+//	targCopy.Balances = nil
+//	targCopy.Validators = nil
+//
+//	baseRestBytes := ssz.Marshal(&baseCopy)
+//	targRestBytes := ssz.Marshal(&targCopy)
+//	restDiff, err := xorAndCompress(baseRestBytes, targRestBytes)
+//	if err != nil {
+//		return nil, fmt.Errorf("rest diff: %w", err)
+//	}
+//
+//	return &BeaconStateDiff{
+//		BalancesDiff:   balDiff,
+//		ValidatorsDiff: valDiff,
+//		RestDiff:       restDiff,
+//	}, nil
+//}
