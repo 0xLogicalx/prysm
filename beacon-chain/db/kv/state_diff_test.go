@@ -3,39 +3,35 @@ package kv
 import (
 	"testing"
 
+	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/OffchainLabs/prysm/v6/testing/require"
+	"github.com/OffchainLabs/prysm/v6/testing/util"
+	"go.etcd.io/bbolt"
 )
 
 func TestStateDiff_LoadOrInitOffset(t *testing.T) {
 	db := setupDB(t)
 
-	offset, rel, err := db.loadOrInitOffset(10)
+	offset, err := db.loadOrInitOffset(10)
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), offset)
-	require.Equal(t, uint64(0), rel)
 
-	offset, rel, err = db.loadOrInitOffset(20)
+	offset, err = db.loadOrInitOffset(20)
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), offset)
-	require.Equal(t, uint64(10), rel)
 
-	offset, rel, err = db.loadOrInitOffset(5)
-	require.ErrorIs(t, ErrSlotBeforeOffset, err)
-
-	offset, rel, err = db.loadOrInitOffset(10)
+	offset, err = db.loadOrInitOffset(5)
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), offset)
-	require.Equal(t, uint64(0), rel)
 }
 
 func TestStateDiff_ComputeLevel(t *testing.T) {
 	db := setupDB(t)
 
-	offset, rel, err := db.loadOrInitOffset(0)
+	offset, err := db.loadOrInitOffset(0)
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), offset)
-	require.Equal(t, uint64(0), rel)
 
 	// 2 ** 21
 	lvl, shouldSave := computeLevel(math.PowerOf2(21))
@@ -125,4 +121,43 @@ func TestStateDiff_ComputeLevel(t *testing.T) {
 	require.Equal(t, true, shouldSave)
 	require.Equal(t, 6, lvl)
 
+}
+
+func TestStateDiff_SaveFullSnapshot(t *testing.T) {
+	db := setupDB(t)
+
+	// Set offset to zero
+	offset, err := db.loadOrInitOffset(0)
+	require.NoError(t, err)
+	require.Equal(t, uint64(0), offset)
+
+	// Create state with slot 2**21 * 3
+	st, err := util.NewBeaconStateElectra()
+	require.NoError(t, err)
+	slot := primitives.Slot(math.PowerOf2(21))
+	err = st.SetSlot(slot)
+	require.NoError(t, err)
+	stssz, err := st.MarshalSSZ()
+	require.NoError(t, err)
+
+	err = db.SaveStateDiff(nil, st)
+	require.NoError(t, err)
+
+	err = db.db.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bbolt.ErrBucketNotFound
+		}
+		for i := 6; i >= 0; i-- {
+			s := bucket.Get(makeKey(i, uint64(slot)))
+			require.NotNil(t, s, "key not found")
+			if i > 0 {
+				require.DeepEqual(t, EmptyNodeMarker, s, "node not marked as empty")
+			} else {
+				require.DeepSSZEqual(t, stssz, s, "retrieved state does not match saved state")
+			}
+		}
+		return nil
+	})
+	require.NoError(t, err)
 }

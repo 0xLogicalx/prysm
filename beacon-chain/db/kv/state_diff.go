@@ -15,6 +15,7 @@ var (
 	offsetKey           = []byte("offset")
 	ErrSlotBeforeOffset = errors.New("slot is before root offset")
 	exponents           = []uint64{21, 18, 16, 13, 11, 9, 5} // TODO: should be taken from a config
+	EmptyNodeMarker     = []byte{0x00}
 )
 
 /*
@@ -115,8 +116,8 @@ func computeLevel(rel uint64) (int, bool) {
 func (s *Store) saveHdiff(ctx context.Context, lvl int, hdiff hdiff.Hdiff) error { return nil }
 
 func (s *Store) saveFullSnapshot(lvl int, state state.ReadOnlyBeaconState) error {
-	slot := state.Slot()
-	key := makeKey(lvl, uint64(slot))
+	slot := uint64(state.Slot())
+	key := makeKey(lvl, slot)
 	stateBytes, err := state.MarshalSSZ()
 	if err != nil {
 		return err
@@ -130,7 +131,13 @@ func (s *Store) saveFullSnapshot(lvl int, state state.ReadOnlyBeaconState) error
 			return err
 		}
 
-		// TODO: fill in the gaps
+		// Save nil entries for higher levels
+		for i := lvl + 1; i < len(exponents); i++ {
+			key = makeKey(i, slot)
+			if err = bucket.Put(key, EmptyNodeMarker); err != nil {
+				return err
+			}
+		}
 
 		return nil
 	})
