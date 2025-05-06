@@ -108,7 +108,7 @@ const (
 	pendingConsolidationLength     = 8 + 8
 )
 
-// NewHdiff desrializes a new Hdiff object from the given seialized data.
+// NewHdiff deserializes a new Hdiff object from the given serialized data.
 func NewHdiff(data HdiffSerialized) (*Hdiff, error) {
 	stateDiff, err := newStateDiff(data.stateDiff)
 	if err != nil {
