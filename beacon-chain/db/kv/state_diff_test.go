@@ -13,15 +13,15 @@ import (
 func TestStateDiff_LoadOrInitOffset(t *testing.T) {
 	db := setupDB(t)
 
-	offset, err := db.loadOrInitOffset(10)
+	offset, err := loadOrInitOffset(db, 10)
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), offset)
 
-	offset, err = db.loadOrInitOffset(20)
+	offset, err = loadOrInitOffset(db, 20)
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), offset)
 
-	offset, err = db.loadOrInitOffset(5)
+	offset, err = loadOrInitOffset(db, 5)
 	require.NoError(t, err)
 	require.Equal(t, uint64(10), offset)
 }
@@ -29,7 +29,7 @@ func TestStateDiff_LoadOrInitOffset(t *testing.T) {
 func TestStateDiff_ComputeLevel(t *testing.T) {
 	db := setupDB(t)
 
-	offset, err := db.loadOrInitOffset(0)
+	offset, err := loadOrInitOffset(db, 0)
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), offset)
 
@@ -127,7 +127,7 @@ func TestStateDiff_SaveFullSnapshot(t *testing.T) {
 	db := setupDB(t)
 
 	// Set offset to zero
-	offset, err := db.loadOrInitOffset(0)
+	offset, err := loadOrInitOffset(db, 0)
 	require.NoError(t, err)
 	require.Equal(t, uint64(0), offset)
 
