@@ -959,6 +959,10 @@ func (h Hdiff) Serialize() HdiffSerialized {
 	}
 }
 
+func (h Hdiff) Slot() primitives.Slot {
+	return h.stateDiff.slot
+}
+
 /*
 
 
