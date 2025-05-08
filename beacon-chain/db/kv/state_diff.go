@@ -109,6 +109,7 @@ func saveHdiff(s *Store, lvl int, anchor, st state.ReadOnlyBeaconState) error {
 func saveFullSnapshot(s *Store, lvl int, st state.ReadOnlyBeaconState) error {
 	slot := uint64(st.Slot())
 	key := makeKey(lvl, slot)
+	version := st.Version()
 	stateBytes, err := st.MarshalSSZ()
 	if err != nil {
 		return err
