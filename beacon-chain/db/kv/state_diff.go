@@ -178,7 +178,15 @@ func getFullSnapshot(s *Store, lvl int, slot uint64) (state.BeaconState, error) 
 		return nil, err
 	}
 
-	//st, err :=
+	valEntries, valErr := s.validatorEntries(context.Background(), blockRoot)
+	if valErr != nil {
+		return nil, valErr
+	}
+
+	st, err := s.unmarshalState(nil, stateBytes, valEntries)
+	if err != nil {
+		return nil, err
+	}
 }
 
 func appendUnique(s []uint64, v uint64) []uint64 {
