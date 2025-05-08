@@ -4,8 +4,11 @@ import (
 	"context"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/consensus-types/hdiff"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
+	"github.com/OffchainLabs/prysm/v6/math"
 	"github.com/OffchainLabs/prysm/v6/monitoring/tracing/trace"
+	"github.com/pkg/errors"
 	bolt "go.etcd.io/bbolt"
 )
 
@@ -68,7 +71,7 @@ func (s *Store) StateDiff(ctx context.Context, slot primitives.Slot) (state.Beac
 		return nil, ErrSlotBeforeOffset
 	}
 
-	snapshot, diffChain := getDiffChain(s, offset, slot)
+	snapshot, diffChain, err := getDiffChain(s, offset, slot)
 	return nil, nil
 }
 
@@ -129,4 +132,60 @@ func saveFullSnapshot(s *Store, lvl int, st state.ReadOnlyBeaconState) error {
 	// Save the full state to the cache.
 	anchorCache[lvl] = st
 	return nil
+}
+
+func getDiffChain(s *Store, offset uint64, slot primitives.Slot) (state.BeaconState, []*hdiff.Hdiff, error) {
+	rel := uint64(slot) - offset
+	lvl := computeLevel(offset, slot)
+	if lvl == -1 {
+		return nil, nil, errors.New("slot not in tree")
+	}
+
+	baseSpan := math.PowerOf2(exponents[0])
+	baseAnchorSlot := (rel / baseSpan * baseSpan) + offset
+
+	var diffChainIndices []uint64
+	for i := 1; i < lvl; i++ {
+		span := math.PowerOf2(exponents[i])
+		diffSlot := rel / span * span
+		if diffSlot == baseAnchorSlot {
+			continue
+		}
+		diffChainIndices = appendUnique(diffChainIndices, diffSlot+offset)
+	}
+
+	baseAnchorSnapshot, err := getFullSnapshot(s, lvl, baseAnchorSlot)
+
+}
+
+func getFullSnapshot(s *Store, lvl int, slot uint64) (state.BeaconState, error) {
+	key := makeKey(lvl, slot)
+	var stateBytes []byte
+
+	err := s.db.View(func(tx *bolt.Tx) error {
+		bucket := tx.Bucket(stateDiffBucket)
+		if bucket == nil {
+			return bolt.ErrBucketNotFound
+		}
+		stateBytes = bucket.Get(key)
+		if stateBytes == nil {
+			return errors.New("state not found")
+		}
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	//st, err :=
+}
+
+func appendUnique(s []uint64, v uint64) []uint64 {
+	for _, x := range s {
+		if x == v {
+			return s
+		}
+	}
+	return append(s, v)
 }
