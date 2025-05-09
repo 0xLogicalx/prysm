@@ -8,6 +8,7 @@ import (
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
+	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/math"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -33,7 +34,7 @@ func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (an
 	}
 
 	relSlot := uint64(slot) - offset
-	prevExp := exponents[lvl-1]
+	prevExp := params.StateHierarchyExponents()[lvl-1]
 	span := math.PowerOf2(prevExp)
 	anchorSlot := primitives.Slot((relSlot / span * span) + offset)
 
@@ -62,7 +63,7 @@ func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (an
 // ComputeLevel computes the level in the diff tree. Returns -1 in case slot should not be in tree.
 func computeLevel(offset uint64, slot primitives.Slot) int {
 	rel := uint64(slot) - offset
-	for i, exp := range exponents {
+	for i, exp := range params.StateHierarchyExponents() {
 		span := math.PowerOf2(exp)
 		if rel%span == 0 {
 			return i

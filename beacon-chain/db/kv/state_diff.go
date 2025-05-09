@@ -127,7 +127,6 @@ func (s *Store) saveFullSnapshot(lvl int, st state.ReadOnlyBeaconState) error {
 	stateBytes, err := st.MarshalSSZ()
 	// add version key to value
 	enc, err := addKey(st.Version(), stateBytes)
-
 	if err != nil {
 		return err
 	}
