@@ -4,10 +4,14 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/primitives"
 	"github.com/OffchainLabs/prysm/v6/math"
+	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 	"go.etcd.io/bbolt"
 )
 
@@ -23,7 +27,7 @@ func makeKey(level int, slot uint64) []byte {
 	return buf
 }
 
-func getAnchorState(s *Store, offset uint64, lvl int, slot primitives.Slot) (anchor state.ReadOnlyBeaconState, err error) {
+func (s *Store) getAnchorState(offset uint64, lvl int, slot primitives.Slot) (anchor state.ReadOnlyBeaconState, err error) {
 	if lvl == 0 {
 		return nil, errors.New("no anchor for level 0")
 	}
@@ -68,7 +72,7 @@ func computeLevel(offset uint64, slot primitives.Slot) int {
 	return -1
 }
 
-func loadOrInitOffset(s *Store, slot primitives.Slot) (offset uint64, err error) {
+func (s *Store) loadOrInitOffset(slot primitives.Slot) (offset uint64, err error) {
 	return offset, s.db.Update(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
 		if bucket == nil {
@@ -91,7 +95,7 @@ func loadOrInitOffset(s *Store, slot primitives.Slot) (offset uint64, err error)
 	})
 }
 
-func getOffset(s *Store) (offset uint64, err error) {
+func (s *Store) getOffset() (offset uint64, err error) {
 	return offset, s.db.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(stateDiffBucket)
 		if bucket == nil {
@@ -105,4 +109,58 @@ func getOffset(s *Store) (offset uint64, err error) {
 		}
 		return bbolt.ErrIncompatibleValue
 	})
+}
+
+func keyForSnapshot(v int) ([]byte, error) {
+	switch v {
+	case version.Electra:
+		return ElectraKey, nil
+	case version.Deneb:
+		return denebKey, nil
+	case version.Capella:
+		return capellaKey, nil
+	case version.Bellatrix:
+		return bellatrixKey, nil
+	case version.Altair:
+		return altairKey, nil
+	default:
+		return nil, fmt.Errorf("unsupported version %s", version.String(v))
+	}
+}
+
+func (s *Store) decodeStateSnapshot(enc []byte) (state.BeaconState, error) {
+	switch {
+	case HasElectraKey(enc):
+		var electraState ethpb.BeaconStateElectra
+		if err := electraState.UnmarshalSSZ(enc[len(ElectraKey):]); err != nil {
+			return nil, err
+		}
+		return state_native.InitializeFromProtoElectra(&electraState)
+	case hasDenebKey(enc):
+		var denebState ethpb.BeaconStateDeneb
+		if err := denebState.UnmarshalSSZ(enc[len(denebKey):]); err != nil {
+			return nil, err
+		}
+		return state_native.InitializeFromProtoDeneb(&denebState)
+	case hasCapellaKey(enc):
+		var capellaState ethpb.BeaconStateCapella
+		if err := capellaState.UnmarshalSSZ(enc[len(capellaKey):]); err != nil {
+			return nil, err
+		}
+		return state_native.InitializeFromProtoCapella(&capellaState)
+	case hasBellatrixKey(enc):
+		var bellatrixState ethpb.BeaconStateBellatrix
+		if err := bellatrixState.UnmarshalSSZ(enc[len(bellatrixKey):]); err != nil {
+			return nil, err
+		}
+		return state_native.InitializeFromProtoBellatrix(&bellatrixState)
+	case hasAltairKey(enc):
+		var altairState ethpb.BeaconStateAltair
+		if err := altairState.UnmarshalSSZ(enc[len(altairKey):]); err != nil {
+			return nil, err
+		}
+		return state_native.InitializeFromProtoAltair(&altairState)
+	default:
+		return nil, fmt.Errorf("unsupported encoding %x", enc)
+	}
 }
