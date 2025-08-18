@@ -1,4 +1,4 @@
-version: v1.6.0
+version: v1.6.1
 style: full
 
 specrefs:
@@ -358,7 +358,6 @@ exceptions:
     - process_proposer_slashing#gloas
     - process_slot#gloas
     - process_withdrawals#gloas
-    - remove_flag#gloas
     - should_extend_payload#gloas
     - update_latest_messages#gloas
     - upgrade_to_gloas#gloas

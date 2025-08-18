@@ -26,30 +26,37 @@ option go_package = "github.com/OffchainLabs/prysm/v7/proto/prysm/v1alpha1;eth";
 //     parent_block_hash: Hash32
 //     parent_block_root: Root
 //     block_hash: Hash32
+//     prev_randao: Bytes32
 //     fee_recipient: ExecutionAddress
 //     gas_limit: uint64
 //     builder_index: ValidatorIndex
 //     slot: Slot
 //     value: Gwei
+//     execution_payment: Gwei
 //     blob_kzg_commitments_root: Root
 message ExecutionPayloadBid {
   bytes parent_block_hash = 1 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes parent_block_root = 2 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes block_hash = 3 [ (ethereum.eth.ext.ssz_size) = "32" ];
-  bytes fee_recipient = 4 [ (ethereum.eth.ext.ssz_size) = "20" ];
-  uint64 gas_limit = 5;
-  uint64 builder_index = 6 [ (ethereum.eth.ext.cast_type) =
+  bytes prev_randao = 4 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  bytes fee_recipient = 5 [ (ethereum.eth.ext.ssz_size) = "20" ];
+  uint64 gas_limit = 6;
+  uint64 builder_index = 7 [ (ethereum.eth.ext.cast_type) =
   "github.com/OffchainLabs/prysm/v7/"
       "consensus-types/primitives.ValidatorIndex" ];
-  uint64 slot = 7 [
+  uint64 slot = 8 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Slot"
   ];
-  uint64 value = 8 [
+  uint64 value = 9 [
     (ethereum.eth.ext.cast_type) =
         "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
   ];
-  bytes blob_kzg_commitments_root = 9 [ (ethereum.eth.ext.ssz_size) = "32" ];
+  uint64 execution_payment = 10 [
+    (ethereum.eth.ext.cast_type) =
+        "github.com/OffchainLabs/prysm/v7/consensus-types/primitives.Gwei"
+  ];
+  bytes blob_kzg_commitments_root = 11 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
 
 // SignedExecutionPayloadBid wraps an execution payload bid with a signature.
