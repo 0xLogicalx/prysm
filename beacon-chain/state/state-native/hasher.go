@@ -43,6 +43,8 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateElectraFieldCount)
 	case version.Fulu:
 		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateFuluFieldCount)
+	case version.Gloas:
+		fieldRoots = make([][]byte, params.BeaconConfig().BeaconStateGloasFieldCount)
 	default:
 		return nil, fmt.Errorf("unknown state version %s", version.String(state.version))
 	}
@@ -245,13 +247,22 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 		fieldRoots[types.LatestExecutionPayloadHeaderCapella.RealPosition()] = executionPayloadRoot[:]
 	}
 
-	if state.version >= version.Deneb {
+	if state.version >= version.Deneb && state.version < version.Gloas {
 		// Execution payload root.
 		executionPayloadRoot, err := state.latestExecutionPayloadHeaderDeneb.HashTreeRoot()
 		if err != nil {
 			return nil, err
 		}
 		fieldRoots[types.LatestExecutionPayloadHeaderDeneb.RealPosition()] = executionPayloadRoot[:]
+	}
+
+	if state.version == version.Gloas {
+		// Execution payload bid root for Gloas.
+		executionPayloadRoot, err := state.executionPayloadbid.HashTreeRoot()
+		if err != nil {
+			return nil, err
+		}
+		fieldRoots[types.ExecutionPayloadBid.RealPosition()] = executionPayloadRoot[:]
 	}
 
 	if state.version >= version.Capella {
@@ -327,6 +338,45 @@ func ComputeFieldRootsWithHasher(ctx context.Context, state *BeaconState) ([][]b
 			return nil, errors.Wrap(err, "could not compute proposer lookahead merkleization")
 		}
 		fieldRoots[types.ProposerLookahead.RealPosition()] = proposerLookaheadRoot[:]
+	}
+
+	if state.version >= version.Gloas {
+		// Pack execution payload availability bitvector into 32-byte chunks
+		// Calculate number of chunks based on actual field size (1024 bytes for mainnet, 8 bytes for minimal)
+		numChunks := (len(state.executionPayloadAvailability) + 31) / 32
+		chunks := make([][32]byte, numChunks)
+		for i := 0; i < numChunks; i++ {
+			start := i * 32
+			end := start + 32
+			if end > len(state.executionPayloadAvailability) {
+				end = len(state.executionPayloadAvailability)
+			}
+			copy(chunks[i][:], state.executionPayloadAvailability[start:end])
+		}
+		limit := uint64(len(chunks)) // For fixed bitvector, limit equals number of chunks
+		epaRoot, err := ssz.BitwiseMerkleize(chunks, uint64(len(chunks)), limit)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not merkleize execution payload availability")
+		}
+		fieldRoots[types.ExecutionPayloadAvailability.RealPosition()] = epaRoot[:]
+
+		bppRoot, err := stateutil.BuilderPendingPaymentsRoot(state.builderPendingPayments)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute builder pending payments merkleization")
+		}
+		fieldRoots[types.BuilderPendingPayments.RealPosition()] = bppRoot[:]
+
+		bpwRoot, err := stateutil.BuilderPendingWithdrawalsRoot(state.builderPendingWithdrawals)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not compute builder pending withdrawals merkleization")
+		}
+		fieldRoots[types.BuilderPendingWithdrawals.RealPosition()] = bpwRoot[:]
+
+		lbhRoot := bytesutil.ToBytes32(state.latestBlockHash)
+		fieldRoots[types.LatestBlockHash.RealPosition()] = lbhRoot[:]
+
+		lwrRoot := bytesutil.ToBytes32(state.latestWithdrawalsRoot)
+		fieldRoots[types.LatestWithdrawalsRoot.RealPosition()] = lwrRoot[:]
 	}
 	return fieldRoots, nil
 }

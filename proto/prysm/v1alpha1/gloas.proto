@@ -250,7 +250,7 @@ message BeaconStateGloas {
   SyncCommittee current_sync_committee = 9002;
   SyncCommittee next_sync_committee = 9003;
 
-  // Note: latest_execution_payload_header replaced with ExecutionPayloadHeaderGloas in Gloas
+  // Note: latest_execution_payload_header replaced with ExecutionPayloadBid in Gloas
   ExecutionPayloadBid latest_execution_payload_bid = 10001;
 
   // Fields introduced in Capella fork [11001-12000]
@@ -296,12 +296,10 @@ message BeaconStateGloas {
 
   // Fields introduced in Gloas fork [14001-15000]
   bytes execution_payload_availability = 14001 [
-    (ethereum.eth.ext.ssz_size) = "1024" // 8192 bits = 1024 bytes (SLOTS_PER_HISTORICAL_ROOT)
+    (ethereum.eth.ext.ssz_size) = "execution_payload_availability.size"
   ];
-  repeated BuilderPendingPayment builder_pending_payments = 14002
-  [(ethereum.eth.ext.ssz_size) = "64"];
-  repeated BuilderPendingWithdrawal builder_pending_withdrawals = 14003
-  [(ethereum.eth.ext.ssz_max) = "1099511627776"];
+  repeated BuilderPendingPayment builder_pending_payments = 14002 [(ethereum.eth.ext.ssz_size) = "builder_pending_payments.size"];
+  repeated BuilderPendingWithdrawal builder_pending_withdrawals = 14003 [(ethereum.eth.ext.ssz_max) = "1048576"];
   bytes latest_block_hash = 14004 [ (ethereum.eth.ext.ssz_size) = "32" ];
   bytes latest_withdrawals_root = 14005 [ (ethereum.eth.ext.ssz_size) = "32" ];
 }
