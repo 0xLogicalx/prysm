@@ -1777,8 +1777,8 @@ func (b *BeaconStateGloas) MarshalSSZTo(buf []byte) (dst []byte, err error) {
 	}
 
 	// Field (40) 'BuilderPendingWithdrawals'
-	if size := len(b.BuilderPendingWithdrawals); size > 1099511627776 {
-		err = ssz.ErrListTooBigFn("--.BuilderPendingWithdrawals", size, 1099511627776)
+	if size := len(b.BuilderPendingWithdrawals); size > 1048576 {
+		err = ssz.ErrListTooBigFn("--.BuilderPendingWithdrawals", size, 1048576)
 		return
 	}
 	for ii := 0; ii < len(b.BuilderPendingWithdrawals); ii++ {
@@ -2227,7 +2227,7 @@ func (b *BeaconStateGloas) UnmarshalSSZ(buf []byte) error {
 	// Field (40) 'BuilderPendingWithdrawals'
 	{
 		buf = tail[o40:]
-		num, err := ssz.DivideInt2(len(buf), 44, 1099511627776)
+		num, err := ssz.DivideInt2(len(buf), 44, 1048576)
 		if err != nil {
 			return err
 		}
@@ -2658,7 +2658,7 @@ func (b *BeaconStateGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 	{
 		subIndx := hh.Index()
 		num := uint64(len(b.BuilderPendingWithdrawals))
-		if num > 1099511627776 {
+		if num > 1048576 {
 			err = ssz.ErrIncorrectListSize
 			return
 		}
@@ -2667,7 +2667,7 @@ func (b *BeaconStateGloas) HashTreeRootWith(hh *ssz.Hasher) (err error) {
 				return
 			}
 		}
-		hh.MerkleizeWithMixin(subIndx, num, 1099511627776)
+		hh.MerkleizeWithMixin(subIndx, num, 1048576)
 	}
 
 	// Field (41) 'LatestBlockHash'
