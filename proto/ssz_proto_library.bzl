@@ -45,7 +45,9 @@ mainnet = {
     "proposer_lookahead_size": "64",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
     "ptc.size": "64", #PTC_SIZE
     "ptc.type": "github.com/prysmaticlabs/go-bitfield.Bitvector512",
-    "payload_attestation.size": "4"
+    "payload_attestation.size": "4",
+    "execution_payload_availability.size": "1024",
+    "builder_pending_payments.size": "64"
 }
 
 minimal = {
@@ -87,7 +89,9 @@ minimal = {
     "proposer_lookahead_size": "16",  # (MIN_SEED_LOOKAHEAD + 1) * SLOTS_PER_EPOCH
     "ptc.size": "1", #PTC_SIZE
     "ptc.type": "github.com/OffchainLabs/go-bitfield.Bitvector2",
-    "payload_attestation.size": "4"
+    "payload_attestation.size": "4",
+    "execution_payload_availability.size": "8",
+    "builder_pending_payments.size": "16"
 }
 
 ###### Rules definitions #######
