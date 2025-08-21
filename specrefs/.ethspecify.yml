@@ -97,7 +97,7 @@ exceptions:
     - PayloadAttestationData#gloas
     - PayloadAttestationMessage#gloas
     - SignedExecutionPayloadEnvelope#gloas
-    - SignedExecutionPayloadHeader#gloas
+    - SignedExecutionPayloadBid#gloas
 
   dataclasses:
     # Not implemented
