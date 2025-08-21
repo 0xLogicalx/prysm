@@ -182,3 +182,21 @@ func (b *SignedBeaconBlock) SetExecutionRequests(req *enginev1.ExecutionRequests
 	b.block.body.executionRequests = req
 	return nil
 }
+
+// SetPayloadAttestations sets the payload attestations in the block.
+func (b *SignedBeaconBlock) SetPayloadAttestations(pa []*eth.PayloadAttestation) error {
+	if b.version < version.Gloas {
+		return consensus_types.ErrNotSupported("SetPayloadAttestations", b.version)
+	}
+	b.block.body.payloadAttestations = pa
+	return nil
+}
+
+// SetSignedExecutionPayloadHeader sets the signed execution payload header in the block.
+func (b *SignedBeaconBlock) SetSignedExecutionPayloadHeader(header *eth.SignedExecutionPayloadHeader) error {
+	if b.version < version.Gloas {
+		return consensus_types.ErrNotSupported("SetSignedExecutionPayloadHeader", b.version)
+	}
+	b.block.body.signedExecutionPayloadHeader = header
+	return nil
+}
