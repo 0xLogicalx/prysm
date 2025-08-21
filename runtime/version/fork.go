@@ -25,6 +25,7 @@ var versionToString = map[int]string{
 	Deneb:     "deneb",
 	Electra:   "electra",
 	Fulu:      "fulu",
+	Gloas:     "gloas",
 }
 
 // stringToVersion and allVersions are populated in init()

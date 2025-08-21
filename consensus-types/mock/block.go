@@ -276,6 +276,14 @@ func (b *BeaconBlockBody) ExecutionRequests() (*enginev1.ExecutionRequests, erro
 	panic("implement me")
 }
 
+func (b *BeaconBlockBody) PayloadAttestations() ([]*eth.PayloadAttestation, error) {
+	panic("implement me")
+}
+
+func (b *BeaconBlockBody) SignedExecutionPayloadHeader() (*eth.SignedExecutionPayloadHeader, error) {
+	panic("implement me")
+}
+
 func (b *BeaconBlockBody) Attestations() []eth.Att {
 	panic("implement me")
 }
