@@ -173,3 +173,55 @@ func copyBeaconBlockBodyGloas(body *BeaconBlockBodyGloas) *BeaconBlockBodyGloas 
 
 	return copied
 }
+
+// CopyBuilderPendingPaymentSlice creates a deep copy of a builder pending payment slice.
+func CopyBuilderPendingPaymentSlice(original []*BuilderPendingPayment) []*BuilderPendingPayment {
+	if original == nil {
+		return nil
+	}
+
+	copied := make([]*BuilderPendingPayment, len(original))
+	for i, payment := range original {
+		copied[i] = CopyBuilderPendingPayment(payment)
+	}
+	return copied
+}
+
+// CopyBuilderPendingPayment creates a deep copy of a builder pending payment.
+func CopyBuilderPendingPayment(original *BuilderPendingPayment) *BuilderPendingPayment {
+	if original == nil {
+		return nil
+	}
+
+	return &BuilderPendingPayment{
+		Weight:     original.Weight,
+		Withdrawal: CopyBuilderPendingWithdrawal(original.Withdrawal),
+	}
+}
+
+// CopyBuilderPendingWithdrawalSlice creates a deep copy of a builder pending withdrawal slice.
+func CopyBuilderPendingWithdrawalSlice(original []*BuilderPendingWithdrawal) []*BuilderPendingWithdrawal {
+	if original == nil {
+		return nil
+	}
+
+	copied := make([]*BuilderPendingWithdrawal, len(original))
+	for i, withdrawal := range original {
+		copied[i] = CopyBuilderPendingWithdrawal(withdrawal)
+	}
+	return copied
+}
+
+// CopyBuilderPendingWithdrawal creates a deep copy of a builder pending withdrawal.
+func CopyBuilderPendingWithdrawal(original *BuilderPendingWithdrawal) *BuilderPendingWithdrawal {
+	if original == nil {
+		return nil
+	}
+
+	return &BuilderPendingWithdrawal{
+		FeeRecipient:      bytesutil.SafeCopyBytes(original.FeeRecipient),
+		Amount:            original.Amount,
+		BuilderIndex:      original.BuilderIndex,
+		WithdrawableEpoch: original.WithdrawableEpoch,
+	}
+}
