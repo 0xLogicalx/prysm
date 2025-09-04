@@ -323,6 +323,10 @@ var mainnetBeaconConfig = &BeaconChainConfig{
 	BalancePerAdditionalCustodyGroup:      32_000_000_000,
 	DeprecatedMaxBlobsPerBlockFulu:        12,
 
+	// Values related to gloas
+	BuilderPaymentThresholdNumerator:   6,
+	BuilderPaymentThresholdDenominator: 10,
+
 	// Values related to networking parameters.
 	MaxPayloadSize:                  10 * 1 << 20, // 10 MiB
 	AttestationSubnetCount:          64,

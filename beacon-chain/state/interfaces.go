@@ -63,6 +63,7 @@ type ReadOnlyBeaconState interface {
 	ReadOnlyDeposits
 	ReadOnlyConsolidations
 	ReadOnlyProposerLookahead
+	ReadOnlyBuilderPendingPayments
 	ToProtoUnsafe() interface{}
 	ToProto() interface{}
 	GenesisTime() time.Time
@@ -98,6 +99,8 @@ type WriteOnlyBeaconState interface {
 	WriteOnlyWithdrawals
 	WriteOnlyDeposits
 	WriteOnlyProposerLookahead
+	WriteOnlyBuilderPendingPayments
+	WriteOnlyBuilderPendingWithdrawals
 	SetGenesisTime(val time.Time) error
 	SetGenesisValidatorsRoot(val []byte) error
 	SetSlot(val primitives.Slot) error

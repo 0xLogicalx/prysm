@@ -1,0 +1,16 @@
+load("@prysm//tools/go:def.bzl", "go_library")
+
+go_library(
+    name = "go_default_library",
+    srcs = ["pending_payment.go"],
+    importpath = "github.com/OffchainLabs/prysm/v6/beacon-chain/core/gloas",
+    visibility = ["//visibility:public"],
+    deps = [
+        "//beacon-chain/core/helpers:go_default_library",
+        "//beacon-chain/state:go_default_library",
+        "//config/params:go_default_library",
+        "//consensus-types/primitives:go_default_library",
+        "//runtime/version:go_default_library",
+        "@com_github_pkg_errors//:go_default_library",
+    ],
+)

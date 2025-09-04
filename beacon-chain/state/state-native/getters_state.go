@@ -719,3 +719,13 @@ func ProtobufBeaconStateFulu(s interface{}) (*ethpb.BeaconStateFulu, error) {
 	}
 	return pbState, nil
 }
+
+// ProtobufBeaconStateGloas transforms an input into beacon state Gloas in the form of protobuf.
+// Error is returned if the input is not type protobuf beacon state.
+func ProtobufBeaconStateGloas(s interface{}) (*ethpb.BeaconStateGloas, error) {
+	pbState, ok := s.(*ethpb.BeaconStateGloas)
+	if !ok {
+		return nil, errors.New("input is not type pb.BeaconStateGloas")
+	}
+	return pbState, nil
+}

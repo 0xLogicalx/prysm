@@ -2,26 +2,19 @@ package state_native
 
 import (
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
+	"github.com/OffchainLabs/prysm/v6/runtime/version"
 )
 
-// executionPayloadHeaderGloas returns a copy of the beacon state execution payload header for Gloas.
-// This assumes that a lock is already held on BeaconState.
-func (b *BeaconState) executionPayloadHeaderGloas() *ethpb.ExecutionPayloadHeaderGloas {
-	if b.executionPayloadHeader == nil {
-		return nil
+// BuilderPendingPayments returns the builder pending payments in the beacon state.
+func (b *BeaconState) BuilderPendingPayments() ([]*ethpb.BuilderPendingPayment, error) {
+	if b.version < version.Gloas {
+		return nil, errNotSupported("BuilderPendingPayments", b.version)
 	}
-	return b.executionPayloadHeader.Copy()
-}
 
-// executionPayloadAvailabilityVal returns a copy of the execution payload availability.
-// This assumes that a lock is already held on BeaconState.
-func (b *BeaconState) executionPayloadAvailabilityVal() []byte {
-	if b.executionPayloadAvailability == nil {
-		return nil
-	}
-	availability := make([]byte, len(b.executionPayloadAvailability))
-	copy(availability, b.executionPayloadAvailability)
-	return availability
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+
+	return b.builderPendingPaymentsVal(), nil
 }
 
 // builderPendingPaymentsVal returns a copy of the builder pending payments.
@@ -52,6 +45,26 @@ func (b *BeaconState) builderPendingWithdrawalsVal() []*ethpb.BuilderPendingWith
 		}
 	}
 	return withdrawals
+}
+
+// executionPayloadHeaderGloas returns a copy of the beacon state execution payload header for Gloas.
+// This assumes that a lock is already held on BeaconState.
+func (b *BeaconState) executionPayloadHeaderGloas() *ethpb.ExecutionPayloadHeaderGloas {
+	if b.executionPayloadHeader == nil {
+		return nil
+	}
+	return b.executionPayloadHeader.Copy()
+}
+
+// executionPayloadAvailabilityVal returns a copy of the execution payload availability.
+// This assumes that a lock is already held on BeaconState.
+func (b *BeaconState) executionPayloadAvailabilityVal() []byte {
+	if b.executionPayloadAvailability == nil {
+		return nil
+	}
+	availability := make([]byte, len(b.executionPayloadAvailability))
+	copy(availability, b.executionPayloadAvailability)
+	return availability
 }
 
 // latestBlockHashVal returns a copy of the latest block hash.
