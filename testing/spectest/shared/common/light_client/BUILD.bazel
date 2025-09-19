@@ -4,7 +4,9 @@ go_library(
     name = "go_default_library",
     testonly = True,
     srcs = [
+        "data_collection.go",
         "single_merkle_proof.go",
+        "types.go",
         "update_ranking.go",
     ],
     importpath = "github.com/OffchainLabs/prysm/v6/testing/spectest/shared/common/light_client",

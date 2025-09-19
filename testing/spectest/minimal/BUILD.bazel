@@ -18,6 +18,7 @@ go_test(
         "altair__fork__upgrade_to_altair_test.go",
         "altair__fork_transition__transition_test.go",
         "altair__forkchoice__forkchoice_test.go",
+        "altair__light_client__data_collection_test.go",
         "altair__light_client__single_merkle_proof_test.go",
         "altair__light_client__update_ranking_test.go",
         "altair__operations__attestation_test.go",

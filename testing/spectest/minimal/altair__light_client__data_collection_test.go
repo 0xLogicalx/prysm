@@ -7,6 +7,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/testing/spectest/shared/common/light_client"
 )
 
-func TestMinimal_Altair_LightClient_SingleMerkleProof(t *testing.T) {
-	light_client.RunLightClientSingleMerkleProofTests(t, "minimal", version.Altair)
+func TestMinimal_Altair_LightClient_DataCollection(t *testing.T) {
+	light_client.RunLightClientDataCollectionTests(t, "minimal", version.Altair)
 }
