@@ -63,6 +63,7 @@ type ReadOnlyBeaconState interface {
 	ReadOnlyDeposits
 	ReadOnlyConsolidations
 	ReadOnlyProposerLookahead
+	readOnlyGloasFields
 	ToProtoUnsafe() interface{}
 	ToProto() interface{}
 	GenesisTime() time.Time
@@ -99,6 +100,7 @@ type WriteOnlyBeaconState interface {
 	WriteOnlyDeposits
 	WriteOnlyProposerLookahead
 	SetGenesisTime(val time.Time) error
+	writeOnlyGloasFields
 	SetGenesisValidatorsRoot(val []byte) error
 	SetSlot(val primitives.Slot) error
 	SetFork(val *ethpb.Fork) error

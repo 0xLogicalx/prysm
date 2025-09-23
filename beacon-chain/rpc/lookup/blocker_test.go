@@ -190,7 +190,7 @@ func TestBlobsErrorHandling(t *testing.T) {
 
 	t.Run("non-existent block by slot returns 404", func(t *testing.T) {
 		blocker := &BeaconDbBlocker{
-			BeaconDB: db,
+			BeaconDB:         db,
 			ChainInfoFetcher: &mockChain.ChainService{},
 		}
 
