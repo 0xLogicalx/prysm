@@ -193,7 +193,7 @@ func (b *BeaconState) MarshalJSON() ([]byte, error) {
 		PendingPartialWithdrawals:           b.pendingPartialWithdrawals,
 		PendingConsolidations:               b.pendingConsolidations,
 		ProposerLookahead:                   b.proposerLookahead,
-		ExecutionPayloadHeader:              b.executionPayloadbid,
+		ExecutionPayloadBid:                 b.executionPayloadbid,
 		ExecutionPayloadAvailability:        b.executionPayloadAvailability,
 		BuilderPendingPayments:              b.builderPendingPayments,
 		BuilderPendingWithdrawals:           b.builderPendingWithdrawals,

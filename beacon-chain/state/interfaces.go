@@ -63,6 +63,7 @@ type ReadOnlyBeaconState interface {
 	ReadOnlyDeposits
 	ReadOnlyConsolidations
 	ReadOnlyProposerLookahead
+	ReadOnlyGloas
 	ToProtoUnsafe() interface{}
 	ToProto() interface{}
 	GenesisTime() time.Time
@@ -98,6 +99,7 @@ type WriteOnlyBeaconState interface {
 	WriteOnlyWithdrawals
 	WriteOnlyDeposits
 	WriteOnlyProposerLookahead
+	WriteOnlyGloas
 	SetGenesisTime(val time.Time) error
 	SetGenesisValidatorsRoot(val []byte) error
 	SetSlot(val primitives.Slot) error
@@ -354,6 +356,24 @@ type WriteOnlyDeposits interface {
 
 type WriteOnlyProposerLookahead interface {
 	SetProposerLookahead([]primitives.ValidatorIndex) error
+}
+
+type ReadOnlyGloas interface {
+	ExecutionPayloadAvailability() []byte
+	BuilderPendingPayments() []*ethpb.BuilderPendingPayment
+	BuilderPendingWithdrawals() []*ethpb.BuilderPendingWithdrawal
+	LatestBlockHash() [32]byte
+	LatestWithdrawalsRoot() [32]byte
+	ExecutionPayloadBid() *ethpb.ExecutionPayloadBid
+}
+
+type WriteOnlyGloas interface {
+	SetExecutionPayloadAvailability([]byte) error
+	SetBuilderPendingPayments([]*ethpb.BuilderPendingPayment) error
+	SetBuilderPendingWithdrawals([]*ethpb.BuilderPendingWithdrawal) error
+	SetLatestBlockHash([32]byte) error
+	SetLatestWithdrawalsRoot([32]byte) error
+	SetExecutionPayloadBid(*ethpb.ExecutionPayloadBid) error
 }
 
 func IsNil(s BeaconState) bool {

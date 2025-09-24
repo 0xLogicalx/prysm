@@ -12,6 +12,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/execution"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/fulu"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/gloas"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
 	fieldparams "github.com/OffchainLabs/prysm/v6/config/fieldparams"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
@@ -117,6 +118,16 @@ type stateDiff struct {
 	pendingConsolidationsDiffs     []*ethpb.PendingConsolidation
 	// Fulu
 	proposerLookahead []uint64 // override
+
+	// Gloas
+	executionpayloadBid                 *ethpb.ExecutionPayloadBid // override
+	executionPayloadAvailability        []byte                     // override
+	builderPendingPaymentsStartIndex    uint64
+	builderPendingPaymentsDiff          []*ethpb.BuilderPendingPayment // append only
+	builderPendingWithdrawalsStartIndex uint64
+	builderPendingWithdrawalsDiff       []*ethpb.BuilderPendingWithdrawal // append only
+	latestBlockHash                     [32]byte                          // override
+	latestWithdrawalsRoot               [32]byte                          // override
 }
 
 type hdiff struct {
@@ -155,6 +166,8 @@ const (
 	pendingDepositLength           = fieldparams.BLSPubkeyLength + fieldparams.RootLength + 8 + fieldparams.BLSSignatureLength + 8
 	pendingPartialWithdrawalLength = 8 + 8 + 8
 	pendingConsolidationLength     = 8 + 8
+	builderPendingPaymentLength    = 52 // BuilderPendingPayment SSZ size
+	builderPendingWithdrawalLength = 44 // BuilderPendingWithdrawal SSZ size
 	proposerLookaheadLength        = 8 * 2 * fieldparams.SlotsPerEpoch
 )
 
@@ -805,8 +818,14 @@ func newStateDiff(input []byte) (*stateDiff, error) {
 	if err := ret.readNextSyncCommittee(&data); err != nil {
 		return nil, err
 	}
-	if err := ret.readExecutionPayloadHeader(&data); err != nil {
-		return nil, err
+	if ret.targetVersion >= version.Gloas {
+		if err := ret.readExecutionPayloadAvailability(&data); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := ret.readExecutionPayloadHeader(&data); err != nil {
+			return nil, err
+		}
 	}
 	if err := ret.readWithdrawalIndices(&data); err != nil {
 		return nil, err
@@ -828,6 +847,23 @@ func newStateDiff(input []byte) (*stateDiff, error) {
 	}
 	if ret.targetVersion >= version.Fulu {
 		if err := ret.readProposerLookahead(&data); err != nil {
+			return nil, err
+		}
+	}
+	if ret.targetVersion >= version.Gloas {
+		if err := ret.readBuilderPendingPayments(&data); err != nil {
+			return nil, err
+		}
+		if err := ret.readBuilderPendingWithdrawals(&data); err != nil {
+			return nil, err
+		}
+		if err := ret.readLatestBlockHash(&data); err != nil {
+			return nil, err
+		}
+		if err := ret.readLatestWithdrawalsRoot(&data); err != nil {
+			return nil, err
+		}
+		if err := ret.readExecutionPayloadBid(&data); err != nil {
 			return nil, err
 		}
 	}
@@ -1071,17 +1107,33 @@ func (s *stateDiff) serialize() []byte {
 		ret = append(ret, s.nextSyncCommittee.AggregatePubkey...)
 	}
 
-	if s.executionPayloadHeader == nil {
-		ret = append(ret, nilMarker)
+	if s.targetVersion >= version.Gloas {
+		if s.executionpayloadBid == nil {
+			ret = append(ret, nilMarker)
+		} else {
+			ret = append(ret, 0x1)
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(s.executionpayloadBid.SizeSSZ()))
+			var err error
+			ret, err = s.executionpayloadBid.MarshalSSZTo(ret)
+			if err != nil {
+				// this is impossible to happen.
+				logrus.WithError(err).Error("Failed to marshal executionpayloadBid")
+				return nil
+			}
+		}
 	} else {
-		ret = append(ret, 0x1)
-		ret = binary.LittleEndian.AppendUint64(ret, uint64(s.executionPayloadHeader.SizeSSZ()))
-		var err error
-		ret, err = s.executionPayloadHeader.MarshalSSZTo(ret)
-		if err != nil {
-			// this is impossible to happen.
-			logrus.WithError(err).Error("Failed to marshal executionPayloadHeader")
-			return nil
+		if s.executionPayloadHeader == nil {
+			ret = append(ret, nilMarker)
+		} else {
+			ret = append(ret, 0x1)
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(s.executionPayloadHeader.SizeSSZ()))
+			var err error
+			ret, err = s.executionPayloadHeader.MarshalSSZTo(ret)
+			if err != nil {
+				// this is impossible to happen.
+				logrus.WithError(err).Error("Failed to marshal executionPayloadHeader")
+				return nil
+			}
 		}
 	}
 
@@ -1128,6 +1180,29 @@ func (s *stateDiff) serialize() []byte {
 		for _, proposer := range s.proposerLookahead {
 			ret = binary.LittleEndian.AppendUint64(ret, proposer)
 		}
+	}
+
+	if s.targetVersion >= version.Gloas {
+		ret = append(ret, s.executionPayloadAvailability...)
+		ret = binary.LittleEndian.AppendUint64(ret, s.builderPendingPaymentsStartIndex)
+		ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.builderPendingPaymentsDiff)))
+		for _, payment := range s.builderPendingPaymentsDiff {
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(payment.Weight))
+			ret = append(ret, payment.Withdrawal.FeeRecipient...)
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(payment.Withdrawal.Amount))
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(payment.Withdrawal.BuilderIndex))
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(payment.Withdrawal.WithdrawableEpoch))
+		}
+		ret = binary.LittleEndian.AppendUint64(ret, s.builderPendingWithdrawalsStartIndex)
+		ret = binary.LittleEndian.AppendUint64(ret, uint64(len(s.builderPendingWithdrawalsDiff)))
+		for _, withdrawal := range s.builderPendingWithdrawalsDiff {
+			ret = append(ret, withdrawal.FeeRecipient...)
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(withdrawal.Amount))
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(withdrawal.BuilderIndex))
+			ret = binary.LittleEndian.AppendUint64(ret, uint64(withdrawal.WithdrawableEpoch))
+		}
+		ret = append(ret, s.latestBlockHash[:]...)
+		ret = append(ret, s.latestWithdrawalsRoot[:]...)
 	}
 	return ret
 }
@@ -1354,9 +1429,16 @@ func diffToState(source, target state.ReadOnlyBeaconState) (*stateDiff, error) {
 	if target.Version() < version.Bellatrix {
 		return ret, nil
 	}
-	ret.executionPayloadHeader, err = target.LatestExecutionPayloadHeader()
-	if err != nil {
-		return nil, err
+	if target.Version() >= version.Gloas {
+		ret.executionpayloadBid = target.ExecutionPayloadBid()
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		ret.executionPayloadHeader, err = target.LatestExecutionPayloadHeader()
+		if err != nil {
+			return nil, err
+		}
 	}
 	if target.Version() < version.Capella {
 		return ret, nil
@@ -1393,6 +1475,21 @@ func diffToState(source, target state.ReadOnlyBeaconState) (*stateDiff, error) {
 	for i, idx := range proposerLookahead {
 		ret.proposerLookahead[i] = uint64(idx)
 	}
+
+	if target.Version() < version.Gloas {
+		return ret, nil
+	}
+
+	// Gloas: Execution payload availability and latest hashes
+	ret.executionPayloadAvailability = target.ExecutionPayloadAvailability()
+	if err := diffBuilderPendingPayments(ret, source, target); err != nil {
+		return nil, err
+	}
+	if err := diffBuilderPendingWithdrawals(ret, source, target); err != nil {
+		return nil, err
+	}
+	ret.latestBlockHash = target.LatestBlockHash()
+	ret.latestWithdrawalsRoot = target.LatestWithdrawalsRoot()
 
 	return ret, nil
 }
@@ -1806,7 +1903,7 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 			return nil, errors.Wrap(err, "failed to set current epoch participation")
 		}
 	}
-	if err := source.SetJustificationBits(bitfield.Bitvector4([]byte{diff.justificationBits})); err != nil {
+	if err := source.SetJustificationBits([]byte{diff.justificationBits}); err != nil {
 		return nil, errors.Wrap(err, "failed to set justification bits")
 	}
 	if diff.previousJustifiedCheckpoint != nil {
@@ -1843,9 +1940,15 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	if diff.targetVersion < version.Bellatrix {
 		return source, nil
 	}
-	if diff.executionPayloadHeader != nil {
-		if err := source.SetLatestExecutionPayloadHeader(diff.executionPayloadHeader); err != nil {
-			return nil, errors.Wrap(err, "failed to set latest execution payload header")
+	if diff.targetVersion >= version.Gloas {
+		if err := source.SetExecutionPayloadBid(diff.executionpayloadBid); err != nil {
+			return nil, errors.Wrap(err, "failed to set execution payload bid")
+		}
+	} else {
+		if diff.executionPayloadHeader != nil {
+			if err := source.SetLatestExecutionPayloadHeader(diff.executionPayloadHeader); err != nil {
+				return nil, errors.Wrap(err, "failed to set latest execution payload header")
+			}
 		}
 	}
 	if diff.targetVersion < version.Capella {
@@ -1895,6 +1998,12 @@ func applyStateDiff(ctx context.Context, source state.BeaconState, diff *stateDi
 	}
 	if err := applyProposerLookaheadDiff(source, diff); err != nil {
 		return nil, errors.Wrap(err, "failed to apply proposer lookahead diff")
+	}
+	if diff.targetVersion < version.Gloas {
+		return source, nil
+	}
+	if err := applyGloasDiff(source, diff); err != nil {
+		return nil, errors.Wrap(err, "failed to apply Gloas diff")
 	}
 	return source, nil
 }
@@ -2091,6 +2200,8 @@ func updateToVersion(ctx context.Context, source state.BeaconState, target int) 
 		ret, err = electra.ConvertToElectra(source)
 	case version.Electra:
 		ret, err = fulu.ConvertToFulu(source)
+	case version.Fulu:
+		ret, err = gloas.ConvertToGloas(source)
 	default:
 		return nil, errors.Errorf("unsupported version %s", version.String(source.Version()))
 	}

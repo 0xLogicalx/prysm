@@ -66,3 +66,12 @@ func (b *BeaconState) latestWithdrawalsRootVal() []byte {
 	copy(root, b.latestWithdrawalsRoot)
 	return root
 }
+
+// executionPayloadBidVal returns a copy of the execution payload bid.
+// This assumes that a lock is already held on BeaconState.
+func (b *BeaconState) executionPayloadBidVal() *ethpb.ExecutionPayloadBid {
+	if b.executionPayloadbid == nil {
+		return nil
+	}
+	return b.executionPayloadbid.Copy()
+}
