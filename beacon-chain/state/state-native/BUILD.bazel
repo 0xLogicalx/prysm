@@ -36,6 +36,7 @@ go_library(
         "setters_deposit_requests.go",
         "setters_deposits.go",
         "setters_eth1.go",
+        "setters_gloas.go",
         "setters_misc.go",
         "setters_participation.go",
         "setters_payload_header.go",

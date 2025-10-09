@@ -142,6 +142,13 @@ func ProcessSlot(ctx context.Context, state state.BeaconState) (state.BeaconStat
 	); err != nil {
 		return nil, err
 	}
+
+	if state.Version() >= version.Gloas {
+		if err := state.UpdateExecutionPayloadAvailabilityAtIndex(uint64((state.Slot()+1)%params.BeaconConfig().SlotsPerHistoricalRoot), 0x0); err != nil {
+			return nil, err
+		}
+	}
+
 	return state, nil
 }
 
