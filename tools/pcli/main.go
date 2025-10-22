@@ -16,6 +16,7 @@ import (
 	state_native "github.com/OffchainLabs/prysm/v6/beacon-chain/state/state-native"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/detect"
 	"github.com/OffchainLabs/prysm/v6/encoding/ssz/equality"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -424,7 +425,11 @@ func debugStateTransition(
 		return st, errors.Wrap(err, "could not process block")
 	}
 	var valid bool
-	valid, err = set.VerifyVerbosely()
+	sigSet := bls.NewSet()
+	for _, s := range set {
+		sigSet.Join(s)
+	}
+	valid, err = sigSet.VerifyVerbosely()
 	if err != nil {
 		return st, errors.Wrap(err, "could not batch verify signature")
 	}

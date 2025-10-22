@@ -11,8 +11,8 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/helpers"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition/interop"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
-	v "github.com/OffchainLabs/prysm/v6/beacon-chain/core/validators"
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/state"
+	"github.com/OffchainLabs/prysm/v6/config/features"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/interfaces"
 	"github.com/OffchainLabs/prysm/v6/crypto/bls"
@@ -70,9 +70,13 @@ func ExecuteStateTransitionNoVerifyAnySig(
 	}
 
 	// Execute per block transition.
-	set, st, err := ProcessBlockNoVerifyAnySig(ctx, st, signed)
+	sigSlice, st, err := ProcessBlockNoVerifyAnySig(ctx, st, signed)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not process block")
+	}
+	set := bls.NewSet()
+	for _, s := range sigSlice {
+		set.Join(s)
 	}
 
 	// State root validation.
@@ -141,12 +145,77 @@ func CalculateStateRoot(
 	}
 
 	// Execute per block transition.
-	state, err = ProcessBlockForStateRoot(ctx, state, signed)
+	if features.Get().EnableProposerPreprocessing {
+		state, err = processBlockForProposing(ctx, state, signed)
+		if err != nil {
+			return [32]byte{}, errors.Wrap(err, "could not process block")
+		}
+	} else {
+		state, err = ProcessBlockForStateRoot(ctx, state, signed)
+		if err != nil {
+			return [32]byte{}, errors.Wrap(err, "could not process block")
+		}
+	}
+	return state.HashTreeRoot(ctx)
+}
+
+// processBlockVerifySigs processes the block and verifies the signatures within it. Block signatures are not verified as this block is not yet signed.
+func processBlockForProposing(ctx context.Context, st state.BeaconState, signed interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
+	var err error
+	var set []*bls.SignatureBatch
+	set, st, err = ProcessBlockNoVerifyAnySig(ctx, st, signed)
 	if err != nil {
-		return [32]byte{}, errors.Wrap(err, "could not process block")
+		return nil, err
+	}
+	if len(set) > 4 || len(set) < 3 {
+		return nil, fmt.Errorf("wrong number of signature batches returned: %d", len(set))
+	}
+	// We first try to verify all sigantures batched optimistically. We ignore block proposer signature.
+	sigSet := bls.NewSet()
+	for _, s := range set[1:] {
+		sigSet.Join(s)
+	}
+	valid, err := sigSet.Verify()
+	if err != nil || valid {
+		return st, err
+	}
+	// Some signature failed to verify.
+	// Verify Attestations signatures
+	valid, err = set[2].Verify()
+	if err != nil {
+		return nil, err
+	}
+	if !valid {
+		return nil, ErrAttestationsSignatureInvalid
 	}
 
-	return state.HashTreeRoot(ctx)
+	// Verify Randao signature
+	valid, err = set[3].Verify()
+	if err != nil {
+		return nil, err
+	}
+	if !valid {
+		return nil, ErrRandaoSignatureInvalid
+	}
+
+	if signed.Block().Version() < version.Capella {
+		//This should not happen as we must have failed one of the above signatures.
+		return st, nil
+	}
+	if len(set) != 4 {
+		return nil, fmt.Errorf("wrong number of signature batches returned for post capella block: %d", len(set))
+	}
+	// Verify BLS to execution changes signatures
+	valid, err = set[4].Verify()
+	if err != nil {
+		return nil, err
+	}
+	if !valid {
+		return nil, ErrBLSToExecutionChangesSignatureInvalid
+	}
+	// We should not reach this point as one of the above signatures must have failed.
+	return st, nil
+
 }
 
 // ProcessBlockNoVerifyAnySig creates a new, modified beacon state by applying block operation
@@ -165,7 +234,7 @@ func ProcessBlockNoVerifyAnySig(
 	ctx context.Context,
 	st state.BeaconState,
 	signed interfaces.ReadOnlySignedBeaconBlock,
-) (*bls.SignatureBatch, state.BeaconState, error) {
+) ([]*bls.SignatureBatch, state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "core.state.ProcessBlockNoVerifyAnySig")
 	defer span.End()
 	if err := blocks.BeaconBlockIsNil(signed); err != nil {
@@ -183,26 +252,27 @@ func ProcessBlockNoVerifyAnySig(
 	}
 
 	sig := signed.Signature()
+	set := make([]*bls.SignatureBatch, 0, 4)
 	bSet, err := b.BlockSignatureBatch(st, blk.ProposerIndex(), sig[:], blk.HashTreeRoot)
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return nil, nil, errors.Wrap(err, "could not retrieve block signature set")
 	}
+	set = append(set, bSet)
 	randaoReveal := signed.Block().Body().RandaoReveal()
 	rSet, err := b.RandaoSignatureBatch(ctx, st, randaoReveal[:])
 	if err != nil {
 		tracing.AnnotateError(span, err)
 		return nil, nil, errors.Wrap(err, "could not retrieve randao signature set")
 	}
+	set = append(set, rSet)
 	aSet, err := b.AttestationSignatureBatch(ctx, st, signed.Block().Body().Attestations())
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not retrieve attestation signature set")
 	}
+	set = append(set, aSet)
 
 	// Merge beacon block, randao and attestations signatures into a set.
-	set := bls.NewSet()
-	set.Join(bSet).Join(rSet).Join(aSet)
-
 	if blk.Version() >= version.Capella {
 		changes, err := signed.Block().Body().BLSToExecutionChanges()
 		if err != nil {
@@ -212,7 +282,7 @@ func ProcessBlockNoVerifyAnySig(
 		if err != nil {
 			return nil, nil, errors.Wrap(err, "could not get BLSToExecutionChanges signatures")
 		}
-		set.Join(cSet)
+		set = append(set, cSet)
 	}
 	return set, st, nil
 }
@@ -385,7 +455,7 @@ func altairOperations(ctx context.Context, st state.BeaconState, beaconBlock int
 	exitInfo := &validators.ExitInfo{}
 	if hasSlashings || hasExits {
 		// ExitInformation is expensive to compute, only do it if we need it.
-		exitInfo = v.ExitInformation(st)
+		exitInfo = validators.ExitInformation(st)
 		if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
 			return nil, errors.Wrap(err, "could not update total active balance cache")
 		}
@@ -417,10 +487,10 @@ func phase0Operations(ctx context.Context, st state.BeaconState, beaconBlock int
 	var err error
 	hasSlashings := len(beaconBlock.Body().ProposerSlashings()) > 0 || len(beaconBlock.Body().AttesterSlashings()) > 0
 	hasExits := len(beaconBlock.Body().VoluntaryExits()) > 0
-	var exitInfo *v.ExitInfo
+	var exitInfo *validators.ExitInfo
 	if hasSlashings || hasExits {
 		// ExitInformation is expensive to compute, only do it if we need it.
-		exitInfo = v.ExitInformation(st)
+		exitInfo = validators.ExitInformation(st)
 		if err := helpers.UpdateTotalActiveBalanceCache(st, exitInfo.TotalActiveBalance); err != nil {
 			return nil, errors.Wrap(err, "could not update total active balance cache")
 		}

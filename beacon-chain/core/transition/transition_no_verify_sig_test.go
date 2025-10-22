@@ -8,6 +8,7 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
+	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -132,7 +133,12 @@ func TestProcessBlockNoVerify_PassesProcessingConditions(t *testing.T) {
 	set, _, err := transition.ProcessBlockNoVerifyAnySig(t.Context(), beaconState, wsb)
 	require.NoError(t, err)
 	// Test Signature set verifies.
-	verified, err := set.Verify()
+	require.Equal(t, true, len(set) > 0)
+	sigSet := bls.NewSet()
+	for _, s := range set {
+		sigSet.Join(s)
+	}
+	verified, err := sigSet.Verify()
 	require.NoError(t, err)
 	assert.Equal(t, true, verified, "Could not verify signature set.")
 }
@@ -145,7 +151,11 @@ func TestProcessBlockNoVerifyAnySigAltair_OK(t *testing.T) {
 	require.NoError(t, err)
 	set, _, err := transition.ProcessBlockNoVerifyAnySig(t.Context(), beaconState, wsb)
 	require.NoError(t, err)
-	verified, err := set.Verify()
+	sigSet := bls.NewSet()
+	for _, s := range set {
+		sigSet.Join(s)
+	}
+	verified, err := sigSet.Verify()
 	require.NoError(t, err)
 	require.Equal(t, true, verified, "Could not verify signature set")
 }
@@ -154,8 +164,12 @@ func TestProcessBlockNoVerify_SigSetContainsDescriptions(t *testing.T) {
 	beaconState, block, _, _, _ := createFullBlockWithOperations(t)
 	wsb, err := blocks.NewSignedBeaconBlock(block)
 	require.NoError(t, err)
-	set, _, err := transition.ProcessBlockNoVerifyAnySig(t.Context(), beaconState, wsb)
+	signatures, _, err := transition.ProcessBlockNoVerifyAnySig(t.Context(), beaconState, wsb)
 	require.NoError(t, err)
+	set := bls.NewSet()
+	for _, s := range signatures {
+		set.Join(s)
+	}
 	assert.Equal(t, len(set.Signatures), len(set.Descriptions), "Signatures and descriptions do not match up")
 	assert.Equal(t, "block signature", set.Descriptions[0])
 	assert.Equal(t, "randao signature", set.Descriptions[1])
