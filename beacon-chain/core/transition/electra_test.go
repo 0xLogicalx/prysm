@@ -1,9 +1,9 @@
-package electra_test
+package transition_test
 
 import (
 	"testing"
 
-	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/electra"
+	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
 	enginev1 "github.com/OffchainLabs/prysm/v6/proto/engine/v1"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
@@ -53,7 +53,7 @@ func TestProcessOperationsWithNilRequests(t *testing.T) {
 
 			require.NoError(t, st.SetSlot(1))
 
-			_, err = electra.ProcessOperations(t.Context(), st, b.Block())
+			_, err = transition.ElectraOperations(t.Context(), st, b.Block())
 			require.ErrorContains(t, tc.errMsg, err)
 		})
 	}
