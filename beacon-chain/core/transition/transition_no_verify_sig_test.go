@@ -8,7 +8,6 @@ import (
 	"github.com/OffchainLabs/prysm/v6/beacon-chain/core/transition"
 	"github.com/OffchainLabs/prysm/v6/config/params"
 	"github.com/OffchainLabs/prysm/v6/consensus-types/blocks"
-	"github.com/OffchainLabs/prysm/v6/crypto/bls"
 	"github.com/OffchainLabs/prysm/v6/encoding/bytesutil"
 	ethpb "github.com/OffchainLabs/prysm/v6/proto/prysm/v1alpha1"
 	"github.com/OffchainLabs/prysm/v6/testing/assert"
@@ -133,8 +132,7 @@ func TestProcessBlockNoVerify_PassesProcessingConditions(t *testing.T) {
 	set, _, err := transition.ProcessBlockNoVerifyAnySig(t.Context(), beaconState, wsb)
 	require.NoError(t, err)
 	// Test Signature set verifies.
-	sigSet := bls.NewSet()
-	sigSet.Join(set.BLSChangeSignatures)
+	sigSet := set.Batch()
 	verified, err := sigSet.Verify()
 	require.NoError(t, err)
 	assert.Equal(t, true, verified, "Could not verify signature set.")
