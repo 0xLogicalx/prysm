@@ -76,16 +76,16 @@ func electraOperations(ctx context.Context, st state.BeaconState, block interfac
 	if err != nil {
 		return nil, errors.Wrap(ErrProcessAttestationsFailed, err.Error())
 	}
-	if _, err := electra.ProcessDeposits(ctx, st, bb.Deposits()); err != nil { // new in electra
-		return nil, errors.Wrap(err, "could not process altair deposit")
+	if _, err := electra.ProcessDeposits(ctx, st, bb.Deposits()); err != nil {
+		return nil, errors.Wrap(ErrProcessDepositsFailed, err.Error())
 	}
 	st, err = blocks.ProcessVoluntaryExits(ctx, st, bb.VoluntaryExits(), exitInfo)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not process voluntary exits")
+		return nil, errors.Wrap(ErrProcessVoluntaryExitsFailed, err.Error())
 	}
 	st, err = blocks.ProcessBLSToExecutionChanges(st, block)
 	if err != nil {
-		return nil, errors.Wrap(err, "could not process bls-to-execution changes")
+		return nil, errors.Wrap(ErrProcessBLSChangesFailed, err.Error())
 	}
 	// new in electra
 	requests, err := bb.ExecutionRequests()

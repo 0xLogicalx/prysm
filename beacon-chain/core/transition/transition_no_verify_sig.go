@@ -73,10 +73,7 @@ func ExecuteStateTransitionNoVerifyAnySig(
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "could not process block")
 	}
-	set := bls.NewSet()
-	for _, s := range sigSlice {
-		set.Join(s)
-	}
+	set := sigSlice.Batch()
 
 	// State root validation.
 	postStateRoot, err := st.HashTreeRoot(ctx)
@@ -161,26 +158,24 @@ func CalculateStateRoot(
 // processBlockVerifySigs processes the block and verifies the signatures within it. Block signatures are not verified as this block is not yet signed.
 func processBlockForProposing(ctx context.Context, rollback state.BeaconState, st state.BeaconState, signed interfaces.ReadOnlySignedBeaconBlock) (state.BeaconState, error) {
 	var err error
-	var set []*bls.SignatureBatch
+	var set BlockSignatureBatches
 	set, st, err = ProcessBlockNoVerifyAnySig(ctx, st, signed)
 	if err != nil {
 		return nil, err
 	}
-	if len(set) > 4 || len(set) < 3 {
-		return nil, fmt.Errorf("wrong number of signature batches returned: %d", len(set))
-	}
 	// We first try to verify all sigantures batched optimistically. We ignore block proposer signature.
-	sigSet := bls.NewSet()
-	for _, s := range set[1:] {
-		sigSet.Join(s)
-	}
+	sigSet := set.Batch()
 	valid, err := sigSet.Verify()
 	if err != nil || valid {
 		return st, err
 	}
 	// Some signature failed to verify.
 	// Verify Attestations signatures
-	valid, err = set[2].Verify()
+	attSigs := set.AttestationSignatures
+	if attSigs == nil {
+		return nil, ErrAttestationsSignatureInvalid
+	}
+	valid, err = attSigs.Verify()
 	if err != nil {
 		return nil, err
 	}
@@ -189,7 +184,11 @@ func processBlockForProposing(ctx context.Context, rollback state.BeaconState, s
 	}
 
 	// Verify Randao signature
-	valid, err = set[3].Verify()
+	randaoSigs := set.RandaoSignatures
+	if randaoSigs == nil {
+		return nil, ErrRandaoSignatureInvalid
+	}
+	valid, err = randaoSigs.Verify()
 	if err != nil {
 		return nil, err
 	}
@@ -201,11 +200,12 @@ func processBlockForProposing(ctx context.Context, rollback state.BeaconState, s
 		//This should not happen as we must have failed one of the above signatures.
 		return st, nil
 	}
-	if len(set) != 4 {
-		return nil, fmt.Errorf("wrong number of signature batches returned for post capella block: %d", len(set))
-	}
 	// Verify BLS to execution changes signatures
-	valid, err = set[4].Verify()
+	blsChangeSigs := set.BLSChangeSignatures
+	if blsChangeSigs == nil {
+		return nil, ErrBLSToExecutionChangesSignatureInvalid
+	}
+	valid, err = blsChangeSigs.Verify()
 	if err != nil {
 		return nil, err
 	}
@@ -214,7 +214,32 @@ func processBlockForProposing(ctx context.Context, rollback state.BeaconState, s
 	}
 	// We should not reach this point as one of the above signatures must have failed.
 	return st, nil
+}
 
+// BlockSignatureBatches holds the signature batches for different parts of a beacon block.
+type BlockSignatureBatches struct {
+	BlockSignatures       *bls.SignatureBatch
+	RandaoSignatures      *bls.SignatureBatch
+	AttestationSignatures *bls.SignatureBatch
+	BLSChangeSignatures   *bls.SignatureBatch
+}
+
+// Batch returns the batch of signature batches in the BlockSignatureBatches.
+func (b BlockSignatureBatches) Batch() *bls.SignatureBatch {
+	sigs := bls.NewSet()
+	if b.BlockSignatures != nil {
+		sigs.Join(b.BlockSignatures)
+	}
+	if b.RandaoSignatures != nil {
+		sigs.Join(b.RandaoSignatures)
+	}
+	if b.AttestationSignatures != nil {
+		sigs.Join(b.AttestationSignatures)
+	}
+	if b.BLSChangeSignatures != nil {
+		sigs.Join(b.BLSChangeSignatures)
+	}
+	return sigs
 }
 
 // ProcessBlockNoVerifyAnySig creates a new, modified beacon state by applying block operation
@@ -233,55 +258,55 @@ func ProcessBlockNoVerifyAnySig(
 	ctx context.Context,
 	st state.BeaconState,
 	signed interfaces.ReadOnlySignedBeaconBlock,
-) ([]*bls.SignatureBatch, state.BeaconState, error) {
+) (BlockSignatureBatches, state.BeaconState, error) {
 	ctx, span := trace.StartSpan(ctx, "core.state.ProcessBlockNoVerifyAnySig")
 	defer span.End()
+	set := BlockSignatureBatches{}
 	if err := blocks.BeaconBlockIsNil(signed); err != nil {
-		return nil, nil, err
+		return set, nil, err
 	}
 
 	if st.Version() != signed.Block().Version() {
-		return nil, nil, fmt.Errorf("state and block are different version. %d != %d", st.Version(), signed.Block().Version())
+		return set, nil, fmt.Errorf("state and block are different version. %d != %d", st.Version(), signed.Block().Version())
 	}
 
 	blk := signed.Block()
 	st, err := ProcessBlockForStateRoot(ctx, st, signed)
 	if err != nil {
-		return nil, nil, err
+		return set, nil, err
 	}
 
 	sig := signed.Signature()
-	set := make([]*bls.SignatureBatch, 0, 4)
 	bSet, err := b.BlockSignatureBatch(st, blk.ProposerIndex(), sig[:], blk.HashTreeRoot)
 	if err != nil {
 		tracing.AnnotateError(span, err)
-		return nil, nil, errors.Wrap(err, "could not retrieve block signature set")
+		return set, nil, errors.Wrap(err, "could not retrieve block signature set")
 	}
-	set = append(set, bSet)
+	set.BlockSignatures = bSet
 	randaoReveal := signed.Block().Body().RandaoReveal()
 	rSet, err := b.RandaoSignatureBatch(ctx, st, randaoReveal[:])
 	if err != nil {
 		tracing.AnnotateError(span, err)
-		return nil, nil, errors.Wrap(err, "could not retrieve randao signature set")
+		return set, nil, errors.Wrap(err, "could not retrieve randao signature set")
 	}
-	set = append(set, rSet)
+	set.RandaoSignatures = rSet
 	aSet, err := b.AttestationSignatureBatch(ctx, st, signed.Block().Body().Attestations())
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "could not retrieve attestation signature set")
+		return set, nil, errors.Wrap(err, "could not retrieve attestation signature set")
 	}
-	set = append(set, aSet)
+	set.AttestationSignatures = aSet
 
 	// Merge beacon block, randao and attestations signatures into a set.
 	if blk.Version() >= version.Capella {
 		changes, err := signed.Block().Body().BLSToExecutionChanges()
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "could not get BLSToExecutionChanges")
+			return set, nil, errors.Wrap(err, "could not get BLSToExecutionChanges")
 		}
 		cSet, err := b.BLSChangesSignatureBatch(st, changes)
 		if err != nil {
-			return nil, nil, errors.Wrap(err, "could not get BLSToExecutionChanges signatures")
+			return set, nil, errors.Wrap(err, "could not get BLSToExecutionChanges signatures")
 		}
-		set = append(set, cSet)
+		set.BLSChangeSignatures = cSet
 	}
 	return set, st, nil
 }
